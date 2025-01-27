@@ -1,0 +1,69 @@
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+//kumanda pinleri (Ardunio için geçerli koddur!)
+ //j1_y A0
+ //j1_x A1
+ //j2_y A2
+ //j2_x A3
+
+ //buton_1 2
+ //buton_2 3
+ //buton_3 4
+ //buton_4 5
+
+// buzzer 6
+
+struct DataPacket {
+  float j1_y;
+  float j1_x;
+  float j2_y;
+  float j2_x;
+  bool b_1;
+  bool b_2;
+  bool b_3;
+  bool b_4;
+};
+
+
+RF24 radio(9, 10);
+const byte address[6] = "90551";
+
+int buzzer = 6;
+
+void setup()
+{
+  pinMode(buzzer, OUTPUT);
+  Serial.begin(9600);
+  radio.begin();
+  radio.openWritingPipe(address);
+  radio.openReadingPipe(1, address);
+  radio.setPALevel(RF24_PA_HIGH);
+}
+
+void loop()
+{
+  DataPacket paket;
+  radio.stopListening();
+  paket.j1_y = analogRead(A0);
+  paket.j1_x = analogRead(A1);
+  paket.j2_y = analogRead(A2);
+  paket.j2_x = analogRead(A3);
+  paket.b_1 = digitalRead(2);
+  paket.b_2 = digitalRead(3);
+  paket.b_3 = digitalRead(4);
+  paket.b_4 = digitalRead(5);
+
+  if (radio.write(&paket, sizeof(paket)))
+  {
+
+    tone(buzzer, 100);
+  }
+  else 
+  {
+    digitalWrite(buzzer, 1000);
+    delay(200);
+  }
+
+
+}
