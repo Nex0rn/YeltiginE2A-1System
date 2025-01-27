@@ -22,7 +22,7 @@ int motor_hizi;
 int motor = D1;
 int buzzer = D0;
 Servo servosag;
-Servo sevosol;
+Servo servosol;
 
 RF24 radio(9, 10);
 const byte address[6] = "90551";
@@ -73,7 +73,7 @@ void loop()
 
   servosag.write(servo_sag);
   servosol.write(servo_sol);
-  writePWM(motor, motor_hizi;
+  writePWM(motor, motor_hizi);
   delay(1);
 }
 
@@ -83,13 +83,5 @@ void writePWM(int pin, int pulseWidth) {
   delayMicroseconds(pulseWidth);
   digitalWrite(pin, 0);
 }
-
-
-
-
-
-
-
-
 
 
