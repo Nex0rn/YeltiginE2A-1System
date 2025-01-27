@@ -1,0 +1,95 @@
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+#include <Servo.h>
+
+//uçak pinleri
+
+// fırçasız motor D1
+//servo motor (sağ kanat için) D2
+//servo motor (sol kanat için) D3
+// eğim sensörü z ekseni A0
+//buzzer D0
+//ledler D4
+
+int z_egim = A0;
+
+
+int servo_sag;
+int servo_sol;
+int motor_hizi;
+
+int motor = D1;
+int buzzer = D0;
+Servo servosag;
+Servo sevosol;
+
+RF24 radio(9, 10);
+const byte address[6] = "90551";
+struct DataPacket {
+  float j1_y;
+  float j1_x;
+  float j2_y;
+  float j2_x;
+  bool b_1;
+  bool b_2;
+  bool b_3;
+  bool b_4;
+};
+
+void setup()
+{
+  servosag.attach(D2);
+  servosol.attach(D3);
+  pinMode(motor, OUTPUT);
+  pinMode(buzzer, OUTPUT);
+  Serial.begin(9600);
+  radio.begin();
+  radio.openWritingPipe(address);
+  radio.openReadingPipe(1, address);
+  radio.setPALevel(RF24_PA_HIGH);
+}
+
+void loop()
+{
+    radio.startListening();
+  if (radio.available())
+  {
+    DataPacket paket;
+    radio.read(&paket, sizeof(paket));
+    servo_sag = servo_sag + paket.j1_x;
+    servo_sol = servo_sol - paket.j1_x;
+    motor_hizi = motor_hizi + paket.j1_y; //[özellikle]burası değişkenlik gösterebilir
+
+  }
+  else
+  {
+    tone(buzzer, 100);
+    delay(1000);
+  }
+
+  servo_sag = servo_sag - analogRead(z_egim);
+  servo_sol = servo_sol + analogRead(z_egim);
+
+  servosag.write(servo_sag);
+  servosol.write(servo_sol);
+  writePWM(motor, motor_hizi;
+  delay(1);
+}
+
+
+void writePWM(int pin, int pulseWidth) {
+  digitalWrite(pin, 1);
+  delayMicroseconds(pulseWidth);
+  digitalWrite(pin, 0);
+}
+
+
+
+
+
+
+
+
+
+
