@@ -2,28 +2,18 @@
 #include <nRF24L01.h>
 #include <RF24.h>
 #include <Servo.h>
-
-//uçak pinleri
-
 // fırçasız motor D1
 //servo motor (sağ kanat için) D2
 //servo motor (sol kanat için) D3
-// eğim sensörü z ekseni A0
-//buzzer D0
-//ledler D4
-
-int z_egim = A0;
-
-
+#define ESC_PIN D8
+Servo esc;
 int servo_sag;
 int servo_sol;
 int motor_hizi;
-
-int motor = D1;
-int buzzer = D0;
+unsigned long buttonPressTime = 0;
+bool buttonPressed = false;
 Servo servosag;
 Servo servosol;
-
 RF24 radio(9, 10);
 const byte address[6] = "90551";
 struct DataPacket {
@@ -31,25 +21,19 @@ struct DataPacket {
   float j1_x;
   float j2_y;
   float j2_x;
-  bool b_1;
-  bool b_2;
-  bool b_3;
-  bool b_4;
+  bool b_1; // uzun basmada (3 sn kadar) uçağa bağlanmaya çalışıyor
+  //bool b_2;
+  //bool b_3;
 };
-
 void setup()
 {
-  servosag.attach(D2);
-  servosol.attach(D3);
-  pinMode(motor, OUTPUT);
-  pinMode(buzzer, OUTPUT);
-  Serial.begin(9600);
+  servosag.attach(D0);
+  servosol.attach(D1);
   radio.begin();
   radio.openWritingPipe(address);
   radio.openReadingPipe(1, address);
   radio.setPALevel(RF24_PA_HIGH);
 }
-
 void loop()
 {
     radio.startListening();
@@ -57,31 +41,31 @@ void loop()
   {
     DataPacket paket;
     radio.read(&paket, sizeof(paket));
-    servo_sag = servo_sag + paket.j1_x;
-    servo_sol = servo_sol - paket.j1_x;
-    motor_hizi = motor_hizi + paket.j1_y; //[özellikle]burası değişkenlik gösterebilir
-
+     if (paket.b_1 == false) {
+      if (!buttonPressed) {
+        buttonPressTime = millis();
+        buttonPressed = true;
+      }
+    } else {
+      if (buttonPressed) {
+        unsigned long pressDuration = millis() - buttonPressTime;
+        if (pressDuration >= 3000) { 
+          esc.attach(ESC_PIN,  1000, 2000);
+          esc.write(180);
+          delay(5000);
+          esc.write(0);
+          delay(2000);
+          esc.write(10);
+        }
+        buttonPressed = false;
+      }
+    }
+    servo_sag = servo_sag + map(paket.j1_x,0,1023,-512,512);
+    servo_sol = servo_sol - map(paket.j1_x,0,1023,-512,512);
+    motor_hizi = motor_hizi + map(paket.j1_y,0,1023,-512,512); //[özellikle]burası değişkenlik gösterebilir
   }
-  else
-  {
-    tone(buzzer, 100);
-    delay(1000);
-  }
-
-  servo_sag = servo_sag - analogRead(z_egim);
-  servo_sol = servo_sol + analogRead(z_egim);
-
   servosag.write(servo_sag);
   servosol.write(servo_sol);
-  writePWM(motor, motor_hizi);
+  esc.write(motor_hizi);
   delay(1);
 }
-
-
-void writePWM(int pin, int pulseWidth) {
-  digitalWrite(pin, 1);
-  delayMicroseconds(pulseWidth);
-  digitalWrite(pin, 0);
-}
-
-
