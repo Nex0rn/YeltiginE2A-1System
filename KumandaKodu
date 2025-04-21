@@ -1,36 +1,28 @@
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
-//kumanda pinleri (Ardunio için geçerli koddur!)
- //j1_y A0
- //j1_x A1
- //j2_y A2
- //j2_x A3
-
- //buton_1 2
- //buton_2 3
- //buton_3 4
- //buton_4 5
-
-// buzzer 6
-
+/*j1_y A0
+j1_x A2
+j2_y A3
+j2_x A4
+buton_1 2
+buton_2 3
+buton_3 4
+buzzer 6*/
 struct DataPacket {
   float j1_y;
   float j1_x;
   float j2_y;
   float j2_x;
-  bool b_1;
+  bool b_1;//C
   bool b_2;
   bool b_3;
-  bool b_4;
 };
-
-
 RF24 radio(9, 10);
 const byte address[6] = "90551";
-
-int buzzer = 6;
-
+const int buzzer = 6;
+unsigned long basmaZamani = 0;
+bool basiliMi = false;
 void setup()
 {
   pinMode(buzzer, OUTPUT);
@@ -40,30 +32,34 @@ void setup()
   radio.openReadingPipe(1, address);
   radio.setPALevel(RF24_PA_HIGH);
 }
-
 void loop()
 {
   DataPacket paket;
   radio.stopListening();
   paket.j1_y = analogRead(A0);
-  paket.j1_x = analogRead(A1);
-  paket.j2_y = analogRead(A2);
-  paket.j2_x = analogRead(A3);
+  paket.j1_x = analogRead(A2);
+  paket.j2_y = analogRead(A3);
+  paket.j2_x = analogRead(A4);
   paket.b_1 = digitalRead(2);
   paket.b_2 = digitalRead(3);
   paket.b_3 = digitalRead(4);
-  paket.b_4 = digitalRead(5);
-
-  if (radio.write(&paket, sizeof(paket)))
-  {
-
-    tone(buzzer, 100);
+  radio.write(&paket, sizeof(paket));
+  if (paket.b_1 == LOW) { 
+    if (!basiliMi) {
+      basmaZamani = millis(); 
+      basiliMi = true;
+    }
+  } else {
+    if (basiliMi) {
+      if (millis() - basmaZamani >= 3000) { 
+        for (int i = 1 ; i < 10 ; i++){
+          tone(buzzer, 1000);
+          delay(100);
+          tone(buzzer, 0);
+          delay(100);
+        }
+      }
+      basiliMi = false;
+    }
   }
-  else 
-  {
-    digitalWrite(buzzer, 1000);
-    delay(200);
-  }
-
-
 }
