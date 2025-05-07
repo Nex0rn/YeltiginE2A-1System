@@ -2,18 +2,17 @@
 #include <nRF24L01.h>
 #include <RF24.h>
 #include <Servo.h>
+#include <algorithm>
+
 // fırçasız motor D1
 //servo motor (sağ kanat için) D2
 //servo motor (sol kanat için) D3
-#define ESC_PIN D8
 Servo esc;
-int servo_sag;
-int servo_sol;
-int motor_hizi;
-unsigned long buttonPressTime = 0;
-bool buttonPressed = false;
-Servo servosag;
-Servo servosol;
+int motor_hizi = 1000;
+Servo servo_sag;
+Servo servo_sol;
+int _servo_sag = 75;
+int _servo_sol = 75;
 RF24 radio(9, 10);
 const byte address[6] = "90551";
 struct DataPacket {
@@ -22,18 +21,22 @@ struct DataPacket {
   float j2_y;
   float j2_x;
   bool b_1; // uzun basmada (3 sn kadar) uçağa bağlanmaya çalışıyor
-  //bool b_2;
-  //bool b_3;
+  bool b_2;
+  bool b_3;
+  bool connect;
 };
+bool connected = false;
 void setup()
 {
-  servosag.attach(D0);
-  servosol.attach(D1);
+  esc.attach(D8);
+  servo_sag.attach(D0);
+  servo_sol.attach(D1);
   radio.begin();
   radio.openWritingPipe(address);
   radio.openReadingPipe(1, address);
   radio.setPALevel(RF24_PA_HIGH);
 }
+
 void loop()
 {
     radio.startListening();
@@ -41,31 +44,46 @@ void loop()
   {
     DataPacket paket;
     radio.read(&paket, sizeof(paket));
-     if (paket.b_1 == false) {
-      if (!buttonPressed) {
-        buttonPressTime = millis();
-        buttonPressed = true;
+    int level = map(paket.j1_x,0,1023,0.1,2);
+    if (paket.connect && connected == false){
+        servo_sag.write(0);
+        servo_sol.write(0);
+      
+      for (int i = 0;i<= 150;i+=5){
+        servo_sag.write(i);
+        servo_sol.write(150-i);
+        delay(10);
       }
-    } else {
-      if (buttonPressed) {
-        unsigned long pressDuration = millis() - buttonPressTime;
-        if (pressDuration >= 3000) { 
-          esc.attach(ESC_PIN,  1000, 2000);
-          esc.write(180);
-          delay(5000);
-          esc.write(0);
-          delay(2000);
-          esc.write(10);
-        }
-        buttonPressed = false;
+      for (int i = 0;i<= 150;i+=5){
+        servo_sag.write(150-i);
+        servo_sol.write(i);
+        delay(10);
       }
+      servo_sag.write(75);
+      servo_sol.write(75);
+      esc.write(180);
+      delay(5000);
+      esc.write(0);
+      delay(2000);
+      esc.write(10); 
+      connected = true;
     }
-    servo_sag = servo_sag + map(paket.j1_x,0,1023,-512,512);
-    servo_sol = servo_sol - map(paket.j1_x,0,1023,-512,512);
-    motor_hizi = motor_hizi + map(paket.j1_y,0,1023,-512,512); //[özellikle]burası değişkenlik gösterebilir
+    if (connected){
+    _servo_sag += map(paket.j2_x,0,1023,(-150*level),(150*level));
+    _servo_sol += 150-map(paket.j2_x,0,1023,(-150*level),(150*level));
+
+    _servo_sag += map(paket.j2_y,0,1023,(-150*level),(150*level));
+    _servo_sol += map(paket.j2_y,0,1023,(-150*level),(150*level));
+
+    motor_hizi = std::clamp(
+    static_cast<int>(motor_hizi + map(paket.j1_y, 0, 1023, (-512 * level), (512 * level))),
+    1000,
+    2000
+   );
+    }
   }
-  servosag.write(servo_sag);
-  servosol.write(servo_sol);
+  servo_sag.write(_servo_sag);
+  servo_sol.write(_servo_sol);
   esc.write(motor_hizi);
-  delay(1);
+  delay(7);
 }
