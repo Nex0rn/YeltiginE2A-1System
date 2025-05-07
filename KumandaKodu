@@ -17,6 +17,7 @@ struct DataPacket {
   bool b_1;//C
   bool b_2;
   bool b_3;
+  bool connect;
 };
 RF24 radio(9, 10);
 const byte address[6] = "90551";
@@ -34,24 +35,16 @@ void setup()
 }
 void loop()
 {
-  DataPacket paket;
-  radio.stopListening();
-  paket.j1_y = analogRead(A0);
-  paket.j1_x = analogRead(A2);
-  paket.j2_y = analogRead(A3);
-  paket.j2_x = analogRead(A4);
-  paket.b_1 = digitalRead(2);
-  paket.b_2 = digitalRead(3);
-  paket.b_3 = digitalRead(4);
-  radio.write(&paket, sizeof(paket));
-  if (paket.b_1 == LOW) { 
+  bool N = false;
+ if (paket.b_1 == LOW) { 
     if (!basiliMi) {
       basmaZamani = millis(); 
       basiliMi = true;
     }
   } else {
-    if (basiliMi) {
+    if (basiliMi && !N) {
       if (millis() - basmaZamani >= 3000) { 
+        N = true;
         for (int i = 1 ; i < 10 ; i++){
           tone(buzzer, 1000);
           delay(100);
@@ -62,4 +55,19 @@ void loop()
       basiliMi = false;
     }
   }
+
+  DataPacket paket;
+  radio.stopListening();
+  paket.j1_y = analogRead(A0);
+  paket.j1_x = analogRead(A2);
+  paket.j2_y = analogRead(A3);
+  paket.j2_x = analogRead(A4);
+  paket.b_1 = digitalRead(2);
+  paket.b_2 = digitalRead(3);
+  paket.b_3 = digitalRead(4);
+  paket.connect = N;
+  radio.write(&paket, sizeof(paket));
+
+  if (N) {N = false;}
+ delay(10);
 }
