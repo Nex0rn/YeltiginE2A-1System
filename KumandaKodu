@@ -17,46 +17,64 @@ struct DataPacket {
   bool b_1;//C
   bool b_2;
   bool b_3;
-  bool connect;
+
+  bool connect;//b_1'e basılı tutulduğunda bağlanma işlemini kurulumunu yapar
+  bool isik; //b_2'ye isik sistemi kontrolu
 };
+
 RF24 radio(9, 10);
 const byte address[6] = "90551";
 const int buzzer = 6;
-unsigned long basmaZamani = 0;
-bool basiliMi = false;
+int b_1ConnectFnction = 0;
+int b_2isikFunction = 0;
+int bib = 100;
 void setup()
 {
+  pinMode(2,INPUT);
+  pinMode(3,INPUT);
+  pinMode(4,INPUT);
+  pinMode(A0,INPUT);
+  pinMode(A2,INPUT);
+  pinMode(A3,INPUT);
+  pinMode(A4,INPUT);
   pinMode(buzzer, OUTPUT);
-  Serial.begin(9600);
-  radio.begin();
+  while(!radio.begin()){
+    tone(buzzer,200);
+    delay(1000);}
+
+    for (int i = 10; i > 1; i++){
+  tone(buzzer, 1000);
+  delay(100);
+  noTone(buzzer); 
+  delay(100);}
+  
+  radio.setChannel(76);
+  radio.setDataRate(RF24_250KBPS);
+  radio.enableDynamicPayloads();
   radio.openWritingPipe(address);
   radio.openReadingPipe(1, address);
-  radio.setPALevel(RF24_PA_HIGH);
+  radio.setPALevel(RF24_PA_MAX);
 }
-void loop()
-{
-  bool N = false;
- if (paket.b_1 == LOW) { 
-    if (!basiliMi) {
-      basmaZamani = millis(); 
-      basiliMi = true;
+void loop(){
+  DataPacket paket;
+  if (digitalRead(2) == 1){
+    if (b_1ConnectFnction >= 400){
+      paket.connect = true;
+      b_1ConnectFnction = 0;
     }
-  } else {
-    if (basiliMi && !N) {
-      if (millis() - basmaZamani >= 3000) { 
-        N = true;
-        for (int i = 1 ; i < 10 ; i++){
-          tone(buzzer, 1000);
-          delay(100);
-          tone(buzzer, 0);
-          delay(100);
-        }
-      }
-      basiliMi = false;
+    else {
+      b_1ConnectFnction++;
     }
   }
-
-  DataPacket paket;
+  if (digitalRead(3) == 1){
+    if (b_2isikFunction >= 400){
+      paket.isik = true;
+      b_2isikFunction = 0;
+    }
+    else {
+      b_2isikFunction++;
+    }
+  }
   radio.stopListening();
   paket.j1_y = analogRead(A0);
   paket.j1_x = analogRead(A2);
@@ -65,9 +83,15 @@ void loop()
   paket.b_1 = digitalRead(2);
   paket.b_2 = digitalRead(3);
   paket.b_3 = digitalRead(4);
-  paket.connect = N;
-  radio.write(&paket, sizeof(paket));
-
-  if (N) {N = false;}
- delay(10);
+  if (!radio.write(&paket, sizeof(paket))){
+    if (bib <= 0){
+      tone(buzzer, 1500);
+      bib = 100;
+    }
+    else {
+      noTone(buzzer);
+      bib--;
+    }
+  }
+  delay(5);
 }
