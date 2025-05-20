@@ -2,7 +2,6 @@
 #include <nRF24L01.h>
 #include <RF24.h>
 #include <Servo.h>
-#include <algorithm>
 
 // fırçasız motor D1
 //servo motor (sağ kanat için) D2
@@ -11,41 +10,61 @@ Servo esc;
 int motor_hizi = 1000;
 Servo servo_sag;
 Servo servo_sol;
+const int isik2 = D3;
 int _servo_sag = 75;
 int _servo_sol = 75;
-RF24 radio(9, 10);
+
+RF24 radio(D4, D8);
 const byte address[6] = "90551";
 struct DataPacket {
   float j1_y;
   float j1_x;
   float j2_y;
   float j2_x;
-  bool b_1; // uzun basmada (3 sn kadar) uçağa bağlanmaya çalışıyor
+  bool b_1;//C
   bool b_2;
   bool b_3;
-  bool connect;
+
+  bool connect;//b_1'e basılı tutulduğunda bağlanma işlemini kurulumunu yapar
+  bool isik; //b_2'ye isik sistemi kontrolu
 };
-bool connected = false;
+
 void setup()
 {
-  esc.attach(D8);
+  esc.attach(D2);
   servo_sag.attach(D0);
   servo_sol.attach(D1);
-  radio.begin();
+  pinMode(isik2,OUTPUT);
+  while (!radio.begin()){
+      digitalWrite(isik2,1);
+      delay(500);
+      digitalWrite(isik2,0);
+      delay(500);
+  }
+  for (int i = 20;i>1;i--){
+    digitalWrite(isik2,1);
+    delay(50);
+    digitalWrite(isik2,0);
+    delay(50);
+    }
+  radio.setChannel(76);
+  radio.setDataRate(RF24_250KBPS);
+  radio.enableDynamicPayloads();
   radio.openWritingPipe(address);
   radio.openReadingPipe(1, address);
-  radio.setPALevel(RF24_PA_HIGH);
+  radio.setPALevel(RF24_PA_MAX);
 }
 
 void loop()
 {
-    radio.startListening();
+ 
+  radio.startListening();
   if (radio.available())
   {
     DataPacket paket;
     radio.read(&paket, sizeof(paket));
     int level = map(paket.j1_x,0,1023,0.1,2);
-    if (paket.connect && connected == false){
+    if (paket.connect == 1){
         servo_sag.write(0);
         servo_sol.write(0);
       
@@ -66,9 +85,7 @@ void loop()
       esc.write(0);
       delay(2000);
       esc.write(10); 
-      connected = true;
     }
-    if (connected){
     _servo_sag += map(paket.j2_x,0,1023,(-150*level),(150*level));
     _servo_sol += 150-map(paket.j2_x,0,1023,(-150*level),(150*level));
 
@@ -80,10 +97,14 @@ void loop()
     1000,
     2000
    );
-    }
-  }
-  servo_sag.write(_servo_sag);
+    
+    servo_sag.write(_servo_sag);
   servo_sol.write(_servo_sol);
   esc.write(motor_hizi);
-  delay(7);
+  }else {
+    digitalWrite(isik2,0);
+    esc.write(1000);
+  }
+
+  delay(5);
 }
