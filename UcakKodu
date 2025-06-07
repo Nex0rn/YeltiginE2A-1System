@@ -1,110 +1,159 @@
-#include <SPI.h>
-#include <nRF24L01.h>
-#include <RF24.h>
+
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
 #include <Servo.h>
+#include <vector>
+#include <sstream>
+const char* ssid = "Yeltigin_E2A-1";
+const char* password = "sehitkemaleksiimamhatiplisesi";
 
-// fırçasız motor D1
-//servo motor (sağ kanat için) D2
-//servo motor (sol kanat için) D3
-Servo esc;
-int motor_hizi = 1000;
-Servo servo_sag;
-Servo servo_sol;
-const int isik2 = D3;
-int _servo_sag = 75;
-int _servo_sol = 75;
+using namespace std;
 
-RF24 radio(D4, D8);
-const byte address[6] = "90551";
-struct DataPacket {
-  float j1_y;
-  float j1_x;
-  float j2_y;
-  float j2_x;
-  bool b_1;//C
-  bool b_2;
-  bool b_3;
+const char* mqtt_server = "broker.hivemq.com";
+const char* mqtt_topic = "e2a/control";
 
-  bool connect;//b_1'e basılı tutulduğunda bağlanma işlemini kurulumunu yapar
-  bool isik; //b_2'ye isik sistemi kontrolu
-};
+WiFiClient espClient;
+PubSubClient client(espClient);
 
-void setup()
-{
-  esc.attach(D2);
-  servo_sag.attach(D0);
-  servo_sol.attach(D1);
-  pinMode(isik2,OUTPUT);
-  while (!radio.begin()){
-      digitalWrite(isik2,1);
-      delay(500);
-      digitalWrite(isik2,0);
-      delay(500);
-  }
-  for (int i = 20;i>1;i--){
-    digitalWrite(isik2,1);
-    delay(50);
-    digitalWrite(isik2,0);
-    delay(50);
-    }
-  radio.setChannel(76);
-  radio.setDataRate(RF24_250KBPS);
-  radio.enableDynamicPayloads();
-  radio.openWritingPipe(address);
-  radio.openReadingPipe(1, address);
-  radio.setPALevel(RF24_PA_MAX);
+#define ledPin D4
+const int  motor_ =D0;
+const int  srvoSag_= D1;
+const int  srvoSol_ = D2;
+#define buzzer D3
+
+Servo motor;
+Servo srvoSag;
+Servo srvoSol;
+
+void connectedToneMelody(){
+  tone(buzzer, 262, 150);  
+  delay(200);
+  tone(buzzer, 330, 150);  
+  delay(200);
+  tone(buzzer, 392, 300); 
+  delay(350);
+  tone(buzzer, 440, 150); 
+  delay(200);
+  noTone(buzzer);
+}
+void startedToneMelody(){
+    tone(buzzer, 523, 100); 
+  delay(120);
+  tone(buzzer, 659, 100); 
+  delay(120);
+  tone(buzzer, 784, 150); 
+  delay(180);
+  noTone(buzzer);
+}
+void aleretToneMelody(){
+  tone(buzzer, 1000, 100);
+  delay(150);
+  tone(buzzer, 800, 100);   
+  delay(150);
+  noTone(buzzer);
+}
+void playConnectShort() {
+  tone(buzzer, 400, 100);
+  delay(120);
+  tone(buzzer, 600, 150);
+  delay(170);
+  noTone(buzzer);
 }
 
-void loop()
-{
+void setup() {
+  Serial.begin(115200);
+  pinMode(ledPin, OUTPUT);
+  pinMode(buzzer,OUTPUT);
+  motor.attach(motor_);
+  srvoSag.attach(srvoSag_);
+  srvoSol.attach(srvoSol_);
+
+  motor.write(1000);
+  digitalWrite(ledPin, 0);
+  startedToneMelody();
+
  
-  radio.startListening();
-  if (radio.available())
-  {
-    DataPacket paket;
-    radio.read(&paket, sizeof(paket));
-    int level = map(paket.j1_x,0,1023,0.1,2);
-    if (paket.connect == 1){
-        servo_sag.write(0);
-        servo_sol.write(0);
-      
-      for (int i = 0;i<= 150;i+=5){
-        servo_sag.write(i);
-        servo_sol.write(150-i);
-        delay(10);
-      }
-      for (int i = 0;i<= 150;i+=5){
-        servo_sag.write(150-i);
-        servo_sol.write(i);
-        delay(10);
-      }
-      servo_sag.write(75);
-      servo_sol.write(75);
-      esc.write(180);
-      delay(5000);
-      esc.write(0);
-      delay(2000);
-      esc.write(10); 
-    }
-    _servo_sag += map(paket.j2_x,0,1023,(-150*level),(150*level));
-    _servo_sol += 150-map(paket.j2_x,0,1023,(-150*level),(150*level));
+  setup_wifi();
+  playConnectShort();
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(mqttCallback);
+}
 
-    _servo_sag += map(paket.j2_y,0,1023,(-150*level),(150*level));
-    _servo_sol += map(paket.j2_y,0,1023,(-150*level),(150*level));
+void setup_wifi() {
+  delay(10);
 
-    motor_hizi = std::clamp(
-    static_cast<int>(motor_hizi + map(paket.j1_y, 0, 1023, (-512 * level), (512 * level))),
-    1000,
-    2000
-   );
-    
-    servo_sag.write(_servo_sag);
-  servo_sol.write(_servo_sol);
-  esc.write(motor_hizi);
-  }else {
-    digitalWrite(isik2,0);
-    esc.write(1000);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
   }
+}
+int motorHizi = 1000;
+int servoSagAci = 65;
+int servoSolAci = 65; //std açıları bunlar kanada göre değiştirilecek
+bool ledMelody = true;
 
-  delay(5);
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+
+  String message;
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+    vector<int> values;
+    stringstream ss(message);
+    string item;
+    while (getline(ss, item, ',')) {
+        values.push_back(stoi(item));
+    }
+  // vector = values = btn1,btn2,joysoly,joysolx,joysagy,joysagx
+  //btn1 = ledin sürekli yanıp sönmesini kontrol edecek
+  // btn2 motoru kapatacak
+  //btn3 rst butonu yani fiziksel olarak ayarlıyacağız 
+  int SArttirilacak = map(values[5],0,1023,-2,2);
+  int motorArttirma = map(values[2],0,1023,-5,5);
+  int katDeger = map(values[3],0,1023,0.5,4);
+  int mservo = (map(values[4],0,1023,-3,3)*katDeger);
+  servoSagAci = max(0, min(100, (servoSagAci+(SArttirilacak*katDeger)+mservo)));
+  servoSolAci = max(0, min(100, (servoSolAci-(SArttirilacak*katDeger)+mservo)));
+  motorHizi = max(1000,min(2000,(motorHizi+(motorArttirma*katDeger))));
+  if (values[0] == 1){
+    if (ledMelody) ledMelody = false;
+    else ledMelody = true;
+  }
+  if (values[1]){
+    motorHizi = 1000;
+  }
+}
+void reconnect() {
+  while (!client.connected()) {
+    // MQTT Client ID
+    String clientId = "NodeMCUClient-";
+    clientId += String(random(0xffff), HEX);
+    if (client.connect(clientId.c_str())) {
+      client.subscribe(mqtt_topic);
+    } else {
+      delay(5000);
+    }
+  }
+}
+bool connected = false;
+int a = 1500;
+int b = a;
+bool c = true;
+void loop() {
+  if (!client.connected()) {
+    if (connected) aleretToneMelody();
+    connected = false;
+    reconnect();
+  }if (client.connected() && !connected) {playConnectShort(); connected = true;}
+  client.loop();
+  if (ledMelody){
+  if (b > 0 && c){
+    b--;
+    digitalWrite(ledPin,1);
+  }else if (b > 0 && !c){
+    b--;
+    digitalWrite(ledPin,0);
+  }else{
+    b = a;
+  }}
 }
