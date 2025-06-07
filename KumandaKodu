@@ -1,97 +1,30 @@
-#include <SPI.h>
-#include <nRF24L01.h>
-#include <RF24.h>
-/*j1_y A0
-j1_x A2
-j2_y A3
-j2_x A4
-buton_1 2
-buton_2 3
-buton_3 4
-buzzer 6*/
-struct DataPacket {
-  float j1_y;
-  float j1_x;
-  float j2_y;
-  float j2_x;
-  bool b_1;//C
-  bool b_2;
-  bool b_3;
+//btn1,btn2,joysoly,joysolx,joysagy,joysagx
+#include <string.h>
 
-  bool connect;//b_1'e basılı tutulduğunda bağlanma işlemini kurulumunu yapar
-  bool isik; //b_2'ye isik sistemi kontrolu
-};
+#define btn1 2
+#define btn2 3
 
-RF24 radio(9, 10);
-const byte address[6] = "90551";
-const int buzzer = 6;
-int b_1ConnectFnction = 0;
-int b_2isikFunction = 0;
-int bib = 100;
-void setup()
-{
-  pinMode(2,INPUT);
-  pinMode(3,INPUT);
-  pinMode(4,INPUT);
-  pinMode(A0,INPUT);
-  pinMode(A2,INPUT);
-  pinMode(A3,INPUT);
-  pinMode(A4,INPUT);
-  pinMode(buzzer, OUTPUT);
-  while(!radio.begin()){
-    tone(buzzer,200);
-    delay(1000);}
+#define joySolY A0
+#define joySolX A2
+#define joySagY A3
+#define joySagX A4
 
-    for (int i = 10; i > 1; i++){
-  tone(buzzer, 1000);
-  delay(100);
-  noTone(buzzer); 
-  delay(100);}
-  
-  radio.setChannel(76);
-  radio.setDataRate(RF24_250KBPS);
-  radio.enableDynamicPayloads();
-  radio.openWritingPipe(address);
-  radio.openReadingPipe(1, address);
-  radio.setPALevel(RF24_PA_MAX);
+void setup(){
+  pinMode(btn1,INPUT);
+  pinMode(btn2,INPUT);
+  pinMode(joySolY,INPUT);
+  pinMode(joySolX,INPUT);
+  pinMode(joySagY,INPUT);
+  pinMode(joySagX,INPUT);
+  Serial.begin(115400);
 }
+
 void loop(){
-  DataPacket paket;
-  if (digitalRead(2) == 1){
-    if (b_1ConnectFnction >= 400){
-      paket.connect = true;
-      b_1ConnectFnction = 0;
-    }
-    else {
-      b_1ConnectFnction++;
-    }
-  }
-  if (digitalRead(3) == 1){
-    if (b_2isikFunction >= 400){
-      paket.isik = true;
-      b_2isikFunction = 0;
-    }
-    else {
-      b_2isikFunction++;
-    }
-  }
-  radio.stopListening();
-  paket.j1_y = analogRead(A0);
-  paket.j1_x = analogRead(A2);
-  paket.j2_y = analogRead(A3);
-  paket.j2_x = analogRead(A4);
-  paket.b_1 = digitalRead(2);
-  paket.b_2 = digitalRead(3);
-  paket.b_3 = digitalRead(4);
-  if (!radio.write(&paket, sizeof(paket))){
-    if (bib <= 0){
-      tone(buzzer, 1500);
-      bib = 100;
-    }
-    else {
-      noTone(buzzer);
-      bib--;
-    }
-  }
-  delay(5);
+  string btn1_ = String(digitalRead(btn1));
+  string btn2_ = String(digitalRead(btn2));
+  string joySolY_ = String(analogRead(joySolY));
+  string joySolX_= String(analogRead(joySolX));
+  string joySagY_  = String(analogRead(joySagY));
+  string joySagX_= String(analogRead(joySolX));
+  Serial.println(btn1_+","+btn2+","+joySolY_+","+joySolX+","+joySagY_+","+joySagX);
 }
